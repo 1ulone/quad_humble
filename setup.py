@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'motor_test = quins.motor_test:main',
         ],
     },
 )
