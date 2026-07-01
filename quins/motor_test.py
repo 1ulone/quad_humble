@@ -18,9 +18,9 @@ class RobstrideTunerNode(Node):
 
         # Declare ROS 2 parameters for dynamic tuning
         self.declare_parameter('target_angle_rad', 0.0)
-        self.declare_parameter('kp', 20.0)
-        self.declare_parameter('kd', 0.5)
-        self.declare_parameter('velocity', 0.0)
+        self.declare_parameter('kp', 1.0)
+        self.declare_parameter('kd', 0.2)
+        self.declare_parameter('velocity', 0.44)
         self.declare_parameter('torque_ff', 0.0)
 
         # Register callback to log parameter changes
@@ -32,7 +32,10 @@ class RobstrideTunerNode(Node):
 
     def parameters_callback(self, params):
         for param in params:
-            self.get_logger().info(f"Updated {param.name} to {param.value}")
+            if param.name == "target_angle_rad":
+                self.get_logger().info(f"Updated {param.name} to {(param.value / 360) * 6.25}")
+            else:
+                self.get_logger().info(f"Updated {param.name} to {param.value}")
         return SetParametersResult(successful=True)
 
     def float_to_uint(self, x, x_min, x_max, bits):
@@ -66,11 +69,13 @@ class RobstrideTunerNode(Node):
 
     def send_command(self):
         # Fetch current parameter values dynamically from rqt
-        target_angle_rad = self.get_parameter('target_angle_rad').value
+        target_angle_rad = (self.get_parameter('target_angle_rad').value / 360) * 6.25 
         kp = self.get_parameter('kp').value
         kd = self.get_parameter('kd').value
         velocity = self.get_parameter('velocity').value
         torque_ff = self.get_parameter('torque_ff').value
+
+        clamp = min(6.25, max(-6.25, target_angle_rad))
 
         P_MIN, P_MAX = -12.5, 12.5
         V_MIN, V_MAX = -44.0, 44.0
@@ -78,7 +83,7 @@ class RobstrideTunerNode(Node):
         KD_MIN, KD_MAX = 0.0, 5.0
         T_MIN, T_MAX = -17.0, 17.0
 
-        p_int = self.float_to_uint(target_angle_rad, P_MIN, P_MAX, 16)
+        p_int = self.float_to_uint(clamp, P_MIN, P_MAX, 16)
         v_int = self.float_to_uint(velocity, V_MIN, V_MAX, 16)
         kp_int = self.float_to_uint(kp, KP_MIN, KP_MAX, 16)
         kd_int = self.float_to_uint(kd, KD_MIN, KD_MAX, 16)
