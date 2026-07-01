@@ -48,13 +48,19 @@ class RobstrideNode(Node):
 
         # Serial frame format: [ID (1 byte)] + [8 bytes data]
         # This assumes your hardware serial bridge expects a simple 9-byte packet
-        packet = bytearray([self.motor_id]) + data
+        frame = bytearray([
+            (self.motor_id >> 24) & 0xFF,
+            (self.motor_id >> 16) & 0xFF,
+            (self.motor_id >> 8) & 0xFF,
+            self.motor_id & 0xFF,
+            8  # Data Length Code (DLC)
+        ]) + data
         
         try:
-            self.ser.write(packet)
-            self.get_logger().info(f"Serial command sent to {self.port}")
+            self.ser.write(frame)
+            self.get_logger().info("Sent frame to serial bridge")
         except Exception as e:
-            self.get_logger().error(f"Serial write failed: {e}")
+            self.get_logger().error(f"Write failed: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
