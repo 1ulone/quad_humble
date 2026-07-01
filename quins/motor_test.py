@@ -27,20 +27,21 @@ class RobstrideNode(Node):
         return int(((x - offset) * ((1 << bits) - 1)) / span)
 
     def send_can_packet(self, comm_type, motor_id, data):
-        # Format bits 28-24 as Comm Type, bits 7-0 as Motor ID[cite: 1]
         can_id = (comm_type << 24) | (motor_id & 0xFF)
         
-        # Bridge Protocol: [4 bytes ID] + [1 byte DLC] + [8 bytes DATA]
-        frame = bytearray([
+        # Construct the internal payload
+        payload = bytearray([
             (can_id >> 24) & 0xFF, (can_id >> 16) & 0xFF,
             (can_id >> 8) & 0xFF,  (can_id & 0xFF),
-            8 # DLC = 8
+            8 # DLC
         ]) + data
+        
+        # Wrap in official protocol: Header [0x41, 0x54] + Payload + Footer [0x0D, 0x0A]
+        frame = bytearray([0x41, 0x54]) + payload + bytearray([0x0D, 0x0A])
+        
         self.ser.write(frame)
-        if self.ser.in_waiting >= 13: # Feedback frames are 13 bytes
-            feedback = self.ser.read(13)
-        # Byte 5-6 (bits 16-23 in ID) contain fault info
-            self.get_logger().info(f"Feedback received: {feedback.hex()}")
+        
+        self.ser.write(frame)
 
     def enable_motor(self):
         # Communication Type 3: Enable motor[cite: 1]
