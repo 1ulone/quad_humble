@@ -37,6 +37,10 @@ class RobstrideNode(Node):
             8 # DLC = 8
         ]) + data
         self.ser.write(frame)
+        if self.ser.in_waiting >= 13: # Feedback frames are 13 bytes
+            feedback = self.ser.read(13)
+        # Byte 5-6 (bits 16-23 in ID) contain fault info
+            self.get_logger().info(f"Feedback received: {feedback.hex()}")
 
     def enable_motor(self):
         # Communication Type 3: Enable motor[cite: 1]
@@ -75,6 +79,7 @@ class RobstrideNode(Node):
         # Communication Type 1: Control Instruction[cite: 1]
         try:
             self.send_can_packet(1, self.motor_id, data)
+            self.get_logger().info(f"Sending Packet: {data.hex()}")
         except serial.SerialTimeoutException:
             self.get_logger().warn("Serial write timed out")
 
