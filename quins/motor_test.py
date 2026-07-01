@@ -82,7 +82,7 @@ class RobstrideNode(Node):
         try:
             self.send_can_packet(1, self.motor_id, t_int, data)
             # Log the full serial frame to verify header/footer inclusion
-            self.get_logger().info("Frame sent.") 
+            self.get_logger().info(f"send data :{data}") 
         except serial.SerialTimeoutException:
             self.get_logger().warn("Serial write timed out")
 
