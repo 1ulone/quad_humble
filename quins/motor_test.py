@@ -53,6 +53,8 @@ class RobstrideNode(Node):
 
         frame = bytearray([0x41, 0x54]) + payload + bytearray([0x0D, 0x0A])
         self.ser.write(frame)
+        self.get_logger().info(frame.hex())
+        self.get_logger().info(self.ser.read())
 
     def enable_motor(self):
         # Type 3: Enable. data16 field = host CAN ID, payload = 0 (manual p.20, 26)
