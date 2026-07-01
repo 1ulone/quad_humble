@@ -17,6 +17,7 @@ class RobstrideNode(Node):
         self.enable_motor()
         
         self.timer = self.create_timer(0.1, self.send_command)
+        self.get_logger().info("Node initialized and timer started.")
 
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
@@ -44,6 +45,7 @@ class RobstrideNode(Node):
         time.sleep(0.1)
 
     def send_command(self):
+        self.get_logger().info("send_command triggered")
         # Target values
         angle, velocity, kp, kd, torque = 0.0, 0.0, 0.0, 0.0, 0.0
 
@@ -71,7 +73,10 @@ class RobstrideNode(Node):
         data[7] = t_int & 0xFF
 
         # Communication Type 1: Control Instruction[cite: 1]
-        self.send_can_packet(1, self.motor_id, data)
+        try:
+            self.send_can_packet(1, self.motor_id, data)
+        except serial.SerialTimeoutException:
+            self.get_logger().warn("Serial write timed out")
 
 def main(args=None):
     rclpy.init(args=args)
