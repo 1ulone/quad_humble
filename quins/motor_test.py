@@ -6,12 +6,16 @@ import time
 class RobstrideNode(Node):
     def __init__(self):
         super().__init__('robstride_node')
-        # Point to your confirmed device path
         self.port = '/dev/ttyCH341USB0'
-        self.baudrate = 115200 # Adjust if your firmware uses a different rate
+        # Baud rate must be 921600 per Robstride official specs[cite: 1]
+        self.baudrate = 921600 
         self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
         
         self.motor_id = 0x01
+        
+        # Mandatory Enable sequence[cite: 1]
+        self.enable_motor()
+        
         self.timer = self.create_timer(0.1, self.send_command)
 
     def float_to_uint(self, x, x_min, x_max, bits):
@@ -21,9 +25,29 @@ class RobstrideNode(Node):
         elif x < x_min: x = x_min
         return int(((x - offset) * ((1 << bits) - 1)) / span)
 
+    def send_can_packet(self, comm_type, motor_id, data):
+        # Format bits 28-24 as Comm Type, bits 7-0 as Motor ID[cite: 1]
+        can_id = (comm_type << 24) | (motor_id & 0xFF)
+        
+        # Bridge Protocol: [4 bytes ID] + [1 byte DLC] + [8 bytes DATA]
+        frame = bytearray([
+            (can_id >> 24) & 0xFF, (can_id >> 16) & 0xFF,
+            (can_id >> 8) & 0xFF,  (can_id & 0xFF),
+            8 # DLC = 8
+        ]) + data
+        self.ser.write(frame)
+
+    def enable_motor(self):
+        # Communication Type 3: Enable motor[cite: 1]
+        self.send_can_packet(3, self.motor_id, bytearray(8))
+        self.get_logger().info("Sent Enable Frame (Type 3)")
+        time.sleep(0.1)
+
     def send_command(self):
+        # Target values
         angle, velocity, kp, kd, torque = 0.0, 0.0, 0.0, 0.0, 0.0
 
+        # Limits defined in manual[cite: 1]
         P_MIN, P_MAX = -12.5, 12.5
         V_MIN, V_MAX = -30.0, 30.0
         KP_MIN, KP_MAX = 0.0, 500.0
@@ -46,21 +70,8 @@ class RobstrideNode(Node):
         data[6] = ((kd_int & 0xF) << 4) | (t_int >> 8)
         data[7] = t_int & 0xFF
 
-        # Serial frame format: [ID (1 byte)] + [8 bytes data]
-        # This assumes your hardware serial bridge expects a simple 9-byte packet
-        frame = bytearray([
-            (self.motor_id >> 24) & 0xFF,
-            (self.motor_id >> 16) & 0xFF,
-            (self.motor_id >> 8) & 0xFF,
-            self.motor_id & 0xFF,
-            8  # Data Length Code (DLC)
-        ]) + data
-        
-        try:
-            self.ser.write(frame)
-            self.get_logger().info("Sent frame to serial bridge")
-        except Exception as e:
-            self.get_logger().error(f"Write failed: {e}")
+        # Communication Type 1: Control Instruction[cite: 1]
+        self.send_can_packet(1, self.motor_id, data)
 
 def main(args=None):
     rclpy.init(args=args)
