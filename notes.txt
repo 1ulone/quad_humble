@@ -1,1 +1,12 @@
-41540bfff80c08855c7fff028f19990d0a
+[INFO] [1782979526.265532144] [motor_controller]: sending to id 1: 41541807e80c0800000000000000000d0a
+[INFO] [1782979526.567896101] [motor_controller]: sending to id 2: 41541807e8140800000000000000000d0a
+[INFO] [1782979526.870179350] [motor_controller]: Programm Initialized. Ready for Tuning / Control.
+[INFO] [1782979534.965839248] [motor_controller]: sending to id 1: 41540bfff80c08855c814700830a3d0d0a
+[INFO] [1782979534.993594872] [motor_controller]: sending to id 2: 41540bfff814087fff814700830a3d0d0a
+[INFO] [1782979542.989332397] [motor_controller]: sending to id 1: 41540bfff80c08855c814700830a3d0d0a
+[INFO] [1782979543.016949903] [motor_controller]: sending to id 2: 41540bfff814088ab8814700830a3d0d0a
+[INFO] [1782979553.317826044] [motor_controller]: sending to id 1: 41540bfff80c089015814700830a3d0d0a
+[INFO] [1782979553.345088624] [motor_controller]: sending to id 2: 41540bfff814089015814700830a3d0d0a
+[INFO] [1782979566.894209135] [motor_controller]: sending to id 1: 41540bfff80c087fff814700830a3d0d0a
+[INFO] [1782979566.922184258] [motor_controller]: sending to id 2: 41540bfff814087fff814700830a3d0d0a
+

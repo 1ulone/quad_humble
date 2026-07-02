@@ -42,6 +42,7 @@ class MotorController(Node):
 
         for m in self.motors:
             self.enable_motor(m.motor_id)
+            time.sleep(0.2)
 
         # self.timer = self.create_timer(0.02, self.send_command)
         self.get_logger().info("Programm Initialized. Ready for Tuning / Control.")
@@ -77,6 +78,8 @@ class MotorController(Node):
 
         frame = bytearray([0x41, 0x54]) + payload + bytearray([0x0D, 0x0A])
         self.ser.write(frame)
+
+        self.get_logger().info(f"sending to id {target_id}: {frame.hex()}")
 
     # NOTE: enable motor 
     def enable_motor(self, target_id):
@@ -147,7 +150,13 @@ def main(args=None):
     def apply_angle(event=None):
         try:
             node.motors[0].angle = float(m1.get())
+            node.motors[1].angle = float(m2.get())
+
             node.send_command(node.motors[0])
+            
+            time.sleep(0.025)
+
+            node.send_command(node.motors[1])
         except ValueError:
             pass
 
