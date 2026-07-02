@@ -3,7 +3,6 @@ from rclpy.node import Node
 from rcl_interfaces.msg import SetParametersResult
 import serial
 import time
-import math
 
 class RobstrideTunerNode(Node):
     def __init__(self):
@@ -30,6 +29,7 @@ class RobstrideTunerNode(Node):
         self.timer = self.create_timer(0.02, self.send_command)
         self.get_logger().info("Tuner node initialized. Open rqt to tune.")
 
+    # NOTE: Debugging on Terminal
     def parameters_callback(self, params):
         for param in params:
             if param.name == "target_angle_rad":
@@ -38,6 +38,7 @@ class RobstrideTunerNode(Node):
                 self.get_logger().info(f"Updated {param.name} to {param.value}")
         return SetParametersResult(successful=True)
 
+    # NOTE: float to integer, input into raw stuff
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
         offset = x_min
@@ -45,6 +46,7 @@ class RobstrideTunerNode(Node):
         elif x < x_min: x = x_min
         return int(((x - offset) * ((1 << bits) - 1)) / span)
 
+    # NOTE: sending message to motor 
     def send_can_packet(self, comm_type, target_id, data16, data):
         real_id = (comm_type << 24) | ((data16 & 0xFFFF) << 8) | (target_id & 0xFF)
         encoded_id = (real_id << 3) | 0x04
@@ -60,13 +62,17 @@ class RobstrideTunerNode(Node):
         frame = bytearray([0x41, 0x54]) + payload + bytearray([0x0D, 0x0A])
         self.ser.write(frame)
 
+    # NOTE: enable motor 
     def enable_motor(self):
         self.send_can_packet(3, self.motor_id, self.host_id, bytearray(8))
         time.sleep(0.1)
 
+    # NOTE: stop motor 
     def stop_motor(self):
         self.send_can_packet(4, self.motor_id, self.host_id, bytearray(8))
 
+
+    # NOTE: sending command 
     def send_command(self):
         # Fetch current parameter values dynamically from rqt
         target_angle_rad = (self.get_parameter('target_angle_rad').value / 360) * 6.25 
