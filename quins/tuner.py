@@ -2,6 +2,7 @@ from rclpy.node import Node
 import rclpy
 import tkinter as tk
 import threading
+from quins.motor_controller import MotorData, MotorController
 
 class Tuner(Node):
     def __init__(self):

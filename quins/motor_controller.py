@@ -4,6 +4,8 @@ from rclpy.node import Node
 import serial
 import time
 import math
+import tkinter as tk
+import threading
 
 KP = 1.0
 KD = 0.2
@@ -33,7 +35,6 @@ class MotorController(Node):
         self.motors = []
 
         self.motors.append(MotorData(127))
-        self.motors.append(MotorData(126))
 
         # Register callback to log parameter changes
         # self.add_on_set_parameters_callback(self.parameters_callback)
@@ -125,13 +126,40 @@ class MotorController(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MotorController()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+
+    root = tk.Tk()
+    root.title("Motor Tuner")
+    root.geometry("500x480")
+
+    tk.Label(root, text="Motor 1 Angle by Degree").pack()
+    m1 = tk.DoubleVar(value=node.motors[0].angle)
+    tk.Entry(root, textvariable=m1).pack()
+    #
+    # tk.Label(root, text="Motor 2 Angle by Degree").pack()
+    # m2 = tk.DoubleVar(value=node.motors[1].angle)
+    # tk.Entry(root, textvariable=m2).pack()
+    #
+    # tk.Label(root, text="Motor 3 Angle by Degree").pack()
+    # m3 = tk.DoubleVar(value=node.motors[2].angle)
+    # tk.Entry(root, textvariable=m3).pack()
+
+    def apply_angle(event=None):
+        try:
+            node.motors[0].angle = float(m1.get())
+            node.send_command(node.motors[0])
+        except ValueError:
+            pass
+
+    submit_button = tk.Button(root, text="Send Angle", command=apply_angle)
+    submit_button.pack()
+
+    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread.start()
+
+    root.mainloop()
+
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
