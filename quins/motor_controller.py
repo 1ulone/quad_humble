@@ -34,7 +34,8 @@ class MotorController(Node):
         self.host_id = 253
         self.motors = []
 
-        self.motors.append(MotorData(127))
+        self.motors.append(MotorData(1))
+        self.motors.append(MotorData(2))
 
         # Register callback to log parameter changes
         # self.add_on_set_parameters_callback(self.parameters_callback)
@@ -134,11 +135,11 @@ def main(args=None):
     tk.Label(root, text="Motor 1 Angle by Degree").pack()
     m1 = tk.DoubleVar(value=node.motors[0].angle)
     tk.Entry(root, textvariable=m1).pack()
-    #
-    # tk.Label(root, text="Motor 2 Angle by Degree").pack()
-    # m2 = tk.DoubleVar(value=node.motors[1].angle)
-    # tk.Entry(root, textvariable=m2).pack()
-    #
+
+    tk.Label(root, text="Motor 2 Angle by Degree").pack()
+    m2 = tk.DoubleVar(value=node.motors[1].angle)
+    tk.Entry(root, textvariable=m2).pack()
+
     # tk.Label(root, text="Motor 3 Angle by Degree").pack()
     # m3 = tk.DoubleVar(value=node.motors[2].angle)
     # tk.Entry(root, textvariable=m3).pack()
