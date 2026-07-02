@@ -1,8 +1,15 @@
+from rclpy.node import Node
 import rclpy
 import tkinter as tk
+import threading
+
+class Tuner(Node):
+    def __init__(self):
+        super().__init__('quins_tuner')
 
 def main(args=None):
     rclpy.init(args=args)
+    node = Tuner()
 
     root = tk.Tk()
     root.title("Motor Tuner")
@@ -20,7 +27,12 @@ def main(args=None):
     m3 = tk.DoubleVar(value=0.0)
     tk.Entry(root, textvariable=m3).pack()
 
+    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread.start()
+
     root.mainloop()
+
+    node.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
