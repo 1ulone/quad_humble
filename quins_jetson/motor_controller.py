@@ -4,6 +4,7 @@ import time
 import math
 import serial
 import tkinter as tk
+from tkinter import ttk
 import threading
 
 from quins_jetson.zero_point_init import get_angle_relative, reset_zero_position
@@ -37,23 +38,23 @@ class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
-        self.port = PORT
-        self.baudrate = 921600
-        self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
-
-        self.host_id = HOST_ID
+        # self.port = PORT
+        # self.baudrate = 921600
+        # self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
+        #
+        # self.host_id = HOST_ID
         self.motors = []
 
         self.motors.append(MotorData(3))
         self.motors.append(MotorData(4))
 
-        for m in self.motors:
-            self.enable_motor(m)
-            time.sleep(0.2)
-
-        self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
-        self.send_command(self.motors[0])
-        self.send_command(self.motors[1])
+        # for m in self.motors:
+        #     self.enable_motor(m)
+        #     time.sleep(0.2)
+        #
+        # self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
+        # self.send_command(self.motors[0])
+        # self.send_command(self.motors[1])
 
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
@@ -201,47 +202,27 @@ def main(args=None):
     root.title("Motor Tuner")
     root.geometry("500x480")
 
-    # NOTE: set Angle by Degree Input 
-    tk.Label(root, text="Motor 1 Angle (rad)").pack()
-    m1 = tk.DoubleVar(value=node.motors[0].angle)
-    tk.Entry(root, textvariable=m1).pack()
-
-    tk.Label(root, text="Motor 2 Angle (rad)").pack()
-    m2 = tk.DoubleVar(value=node.motors[1].angle)
-    tk.Entry(root, textvariable=m2).pack()
+    motor_input = []
+    zeropoint_input = []
 
     def apply_angle(event=None):
         try:
-            node.motors[0].angle = float(m1.get())
-            node.motors[1].angle = float(m2.get())
+            for motor in node.motors:
+                motor.angle = float(motor_input[id].get())
         except ValueError:
             return
 
-        def send_both():
-            node.send_command(node.motors[0])
-            node.send_command(node.motors[1])
+        def send_cmd():
+            for motor in node.motors:
+                node.send_command(motor)
 
-        threading.Thread(target=send_both, daemon=True).start()
-
-    angle_subbutton = tk.Button(root, text="Send Angle", command=apply_angle)
-    angle_subbutton.pack()
-
-    # NOTE: set Zero point via Angle
-    tk.Label(root, text="Set Motor 1 Zero Point").pack()
-    z1 = tk.DoubleVar(value=node.motors[0].zero_point)
-    tk.Entry(root, textvariable=z1).pack()
-
-    tk.Label(root, text="Set Motor 2 Zero Point").pack()
-    z2 = tk.DoubleVar(value=node.motors[1].zero_point)
-    tk.Entry(root, textvariable=z2).pack()
+        threading.Thread(target=send_cmd, daemon=True).start()
 
     def apply_zero_point(event=None):
         try:
-            node.motors[0].zero_point = float(z1.get())
-            node.motors[0].angle = get_angle_relative(node.motors[0].prev_zero_point, float(z1.get()))
-
-            node.motors[1].zero_point = float(z2.get())
-            node.motors[1].angle = get_angle_relative(node.motors[1].prev_zero_point, float(z2.get()))
+            for id, motor in enumerate(node.motors):
+                motor.zero_point = float(zeropoint_input[id])
+                motor.angle = get_angle_relative(motor.prev_zero_point, motor.zero_point)
         except ValueError:
             return
 
@@ -261,40 +242,14 @@ def main(args=None):
 
         threading.Thread(target=send_both, daemon=True).start()
 
-    zero_subbutton = tk.Button(root, text="Set Zero Point", command=apply_zero_point)
-    zero_subbutton.pack()
-
-    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
-    spin_thread.start()
-
-    def jog_right_motor(id):
-        newAngle = min(360, max(-360, node.motors[id].angle+10))
+    def jog_motor(id, isRight):
+        newAngle = min(360, max(-360, node.motors[id].angle+10 if isRight==True else node.motors[id].angle-10))
         node.motors[id].angle = newAngle
 
         def send_cmd(d):
             node.send_command(node.motors[d])
 
         threading.Thread(target=lambda: send_cmd(id), daemon=True).start()
-
-    def jog_left_motor(id):
-        newAngle = min(360, max(-360, node.motors[id].angle-10))
-        node.motors[id].angle = newAngle
-
-        def send_cmd(d):
-            node.send_command(node.motors[d])
-
-        threading.Thread(target=lambda: send_cmd(id), daemon=True).start()
-
-    jog_right_motor1 = tk.Button(root, text="Jog Right Motor 1", command=lambda: jog_right_motor(0))
-    jog_right_motor2 = tk.Button(root, text="Jog Right Motor 2", command=lambda: jog_right_motor(1))
-
-    jog_left_motor1 = tk.Button(root, text="Jog left Motor 1", command=lambda: jog_left_motor(0))
-    jog_left_motor2 = tk.Button(root, text="Jog left Motor 2", command=lambda: jog_left_motor(1))
-
-    jog_right_motor1.pack()
-    jog_left_motor1.pack()
-    jog_right_motor2.pack()
-    jog_left_motor2.pack()
 
     def set_current_zp(id):
         def send_cmd(motor):
@@ -302,11 +257,44 @@ def main(args=None):
 
         threading.Thread(target=lambda: send_cmd(node.motors[id]), daemon=True).start()
 
-    set_zp_from_angle_m1 = tk.Button(root, text="Set Zero Point from Current Angle (motor 1)", command=lambda: set_current_zp(0))
-    set_zp_from_angle_m2 = tk.Button(root, text="Set Zero Point from Current Angle (motor 2)", command=lambda: set_current_zp(1))
 
-    set_zp_from_angle_m1.pack()
-    set_zp_from_angle_m2.pack()
+
+    grid_container = tk.Frame(root)
+    grid_container.pack(pady=10, padx=10)
+
+    for id, motor in enumerate(node.motors):
+        motor_group = ttk.LabelFrame(grid_container, text=f"Motor {id+1}", padding=15)
+        motor_group.grid(row=0, column=id)
+
+        # NOTE: set Angle by Degree Input 
+        ttk.Label(motor_group, text=f"Motor {id+1} Angle (rad)").pack()
+        motor_input.append(tk.DoubleVar(value=motor.angle))
+        ttk.Entry(motor_group, textvariable=motor_input[id]).pack(fill='x')
+
+        # NOTE: set Zero point via Angle
+        ttk.Label(motor_group, text=f"Set Motor {id+1} Zero Point").pack()
+        zeropoint_input.append(tk.DoubleVar(value=motor.zero_point))
+        ttk.Entry(motor_group, textvariable=zeropoint_input[id]).pack(fill='x')
+
+        jm = ttk.Frame(motor_group)
+        jm.pack(side="top", pady=10)
+
+        ttk.Label(jm, text=f"Jog Motor {id+1}").pack()
+        ttk.Button(jm, text="+", command=lambda: jog_motor(id, True)).pack(side="left", padx=5)
+        ttk.Button(jm, text="-", command=lambda: jog_motor(id, False)).pack(side="left", padx=5)
+
+        zpca = tk.Button(motor_group, text="Set Zero Point from Current Angle", command=lambda: set_current_zp(id))
+        zpca.pack()
+
+    angle_subbutton = tk.Button(grid_container, text="Send Angle", command=apply_angle)
+    angle_subbutton.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(20, 5))
+
+    zero_subbutton = tk.Button(grid_container, text="Set Zero Point", command=apply_zero_point)
+    zero_subbutton.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=5)
+
+    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread.start()
+
 
     root.mainloop()
 
