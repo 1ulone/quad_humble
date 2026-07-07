@@ -48,6 +48,8 @@ class MotorController(Node):
             time.sleep(0.2)
 
         self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
+        self.send_command(self.motors[0])
+        self.send_command(self.motors[1])
 
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
@@ -127,7 +129,10 @@ class MotorController(Node):
         m.enabled = False
 
     def send_command(self, target_motor: MotorData):
-        clamped_angle = min(P_MAX, max(P_MIN, target_motor.angle))
+
+        pi2 = math.pi * 2
+        angle_by_degree = (target_motor.angle / 360) * pi2 
+        clamped_angle = min(pi2, max(-pi2, angle_by_degree))
 
         p_int = self.float_to_uint(clamped_angle, P_MIN, P_MAX, 16)
         v_int = self.float_to_uint(VELOCITY, V_MIN, V_MAX, 16)

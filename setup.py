@@ -26,7 +26,6 @@ setup(
         'console_scripts': [
             'motor_test = quins.motor_test:main',
             'motor_controller = quins.motor_controller:main',
-            'motor_tuner = quins.tuner:main',
         ],
     },
 )
