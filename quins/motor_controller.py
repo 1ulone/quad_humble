@@ -268,6 +268,47 @@ def main(args=None):
     spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     spin_thread.start()
 
+    def jog_right_motor(id):
+        newAngle = min(360, max(-360, node.motors[id].angle+10))
+        node.motors[id].angle = newAngle
+
+        def send_cmd(d):
+            node.send_command(node.motors[d])
+
+        threading.Thread(target=lambda: send_cmd(id), daemon=True).start()
+
+    def jog_left_motor(id):
+        newAngle = min(360, max(-360, node.motors[id].angle-10))
+        node.motors[id].angle = newAngle
+
+        def send_cmd(d):
+            node.send_command(node.motors[d])
+
+        threading.Thread(target=lambda: send_cmd(id), daemon=True).start()
+
+    jog_right_motor1 = tk.Button(root, text="Jog Right Motor 1", command=lambda: jog_right_motor(0))
+    jog_right_motor2 = tk.Button(root, text="Jog Right Motor 2", command=lambda: jog_right_motor(1))
+
+    jog_left_motor1 = tk.Button(root, text="Jog left Motor 1", command=lambda: jog_left_motor(0))
+    jog_left_motor2 = tk.Button(root, text="Jog left Motor 2", command=lambda: jog_left_motor(1))
+
+    jog_right_motor1.pack()
+    jog_left_motor1.pack()
+    jog_right_motor2.pack()
+    jog_left_motor2.pack()
+
+    def set_current_zp(id):
+        def send_cmd(motor):
+            node.set_zero_position(motor)
+
+        threading.Thread(target=lambda: send_cmd(node.motors[id]), daemon=True).start()
+
+    set_zp_from_angle_m1 = tk.Button(root, text="Set Zero Point from Current Angle (motor 1)", command=lambda: set_current_zp(0))
+    set_zp_from_angle_m2 = tk.Button(root, text="Set Zero Point from Current Angle (motor 2)", command=lambda: set_current_zp(1))
+
+    set_zp_from_angle_m1.pack()
+    set_zp_from_angle_m2.pack()
+
     root.mainloop()
 
     node.destroy_node()
