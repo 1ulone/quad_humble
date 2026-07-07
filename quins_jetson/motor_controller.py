@@ -1,12 +1,12 @@
 import rclpy
 from rclpy.node import Node
-import serial
 import time
 import math
+import serial
 import tkinter as tk
 import threading
 
-from quins.zero_point_init import get_angle_relative, reset_zero_position
+from quins_jetson.zero_point_init import get_angle_relative, reset_zero_position
 
 PORT = '/dev/ttyCH341USB0'
 
@@ -44,7 +44,6 @@ class MotorController(Node):
         self.host_id = HOST_ID
         self.motors = []
 
-        # Corrected IDs per confirmed Type 0 detection (3 and 4)
         self.motors.append(MotorData(3))
         self.motors.append(MotorData(4))
 

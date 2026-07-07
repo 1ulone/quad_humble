@@ -1,11 +1,3 @@
-import serial
-import struct
-import time
-import os
-import json
-import math
-
-
 def get_angle_relative(prevAngle, newAngle):
     clamp = min(360, max(-360, newAngle)) 
     return -prevAngle + clamp 

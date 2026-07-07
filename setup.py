@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'quins'
+package_name = 'quins_jetson'
 
 setup(
     name=package_name,
@@ -24,9 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'motor_test = quins.motor_test:main',
-            'motor_controller = quins.motor_controller:main',
-            'zp_initialize = quins.zero_point_init:main',
+            'motor_test = quins_jetson.motor_test:main',
+            'motor_controller = quins_jetson.motor_controller:main',
+            'zp_initialize = quins_jetson.zero_point_init:main',
         ],
     },
 )
