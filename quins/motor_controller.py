@@ -1,6 +1,5 @@
 import rclpy
 from rclpy.node import Node
-# from rcl_interfaces.msg import SetParametersResult
 import serial
 import time
 import math
@@ -18,52 +17,47 @@ KP_MIN, KP_MAX = 0.0, 500.0
 KD_MIN, KD_MAX = 0.0, 5.0
 T_MIN, T_MAX = -17.0, 17.0
 
+HOST_ID = 253
+
+
 class MotorData():
     def __init__(self, id):
         self.motor_id = id
         self.angle = 0.0
+        self.enabled = False
+        self.last_fault = None
+
 
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
         self.port = '/dev/ttyCH341USB0'
-        self.baudrate = 921600 
+        self.baudrate = 921600
         self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
 
-        self.host_id = 253
+        self.host_id = HOST_ID
         self.motors = []
 
-        self.motors.append(MotorData(1))
-        self.motors.append(MotorData(2))
-
-        # Register callback to log parameter changes
-        # self.add_on_set_parameters_callback(self.parameters_callback)
+        # Corrected IDs per confirmed Type 0 detection (3 and 4)
+        self.motors.append(MotorData(3))
+        self.motors.append(MotorData(4))
 
         for m in self.motors:
-            self.enable_motor(m.motor_id)
+            self.enable_motor(m)
             time.sleep(0.2)
 
-        # self.timer = self.create_timer(0.02, self.send_command)
-        self.get_logger().info("Programm Initialized. Ready for Tuning / Control.")
+        self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
 
-    # def parameters_callback(self, params):
-    #     for param in params:
-    #         if param.name == "angle_by_degree":
-    #             self.get_logger().info(f"Updated {param.name} to {(param.value / 360) * 6.25}")
-    #         else:
-    #             self.get_logger().info(f"Updated {param.name} to {param.value}")
-    #     return SetParametersResult(successful=True)
-
-    # NOTE: float to integer, input into raw stuff
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
         offset = x_min
-        if x > x_max: x = x_max
-        elif x < x_min: x = x_min
+        if x > x_max:
+            x = x_max
+        elif x < x_min:
+            x = x_min
         return int(((x - offset) * ((1 << bits) - 1)) / span)
 
-    # NOTE: sending message to motor 
     def send_can_packet(self, comm_type, target_id, data16, data):
         real_id = (comm_type << 24) | ((data16 & 0xFFFF) << 8) | (target_id & 0xFF)
         encoded_id = (real_id << 3) | 0x04
@@ -77,26 +71,72 @@ class MotorController(Node):
         ]) + data
 
         frame = bytearray([0x41, 0x54]) + payload + bytearray([0x0D, 0x0A])
+        self.ser.reset_input_buffer()
         self.ser.write(frame)
 
-        self.get_logger().info(f"sending to id {target_id}: {frame.hex()}")
+        return self.read_response()
 
-    # NOTE: enable motor 
-    def enable_motor(self, target_id):
-        self.send_can_packet(3, target_id, self.host_id, bytearray(8))
-        time.sleep(0.1)
+    def read_response(self):
+        # Response frame: 41 54 [4-byte encoded id] [DLC] [8 data bytes] 0d 0a = 17 bytes
+        raw = self.ser.read(17)
+        if len(raw) != 17 or raw[0:2] != b'\x41\x54' or raw[-2:] != b'\x0d\x0a':
+            return None
+        return self.decode_response(raw)
 
-    # NOTE: stop motor 
-    def stop_motor(self, target_id):
-        self.send_can_packet(4, target_id, self.host_id, bytearray(8))
+    def decode_response(self, raw):
+        encoded_id = int.from_bytes(raw[2:6], 'big')
+        real_id = (encoded_id - 0x04) >> 3
 
+        comm_type = (real_id >> 24) & 0x1F
+        data16 = (real_id >> 8) & 0xFFFF
+        target_id = real_id & 0xFF
+        data = raw[7:15]
 
-    # NOTE: sending command 
-    def send_command(self, target_motor):
-        # Fetch current parameter values dynamically from rqt
-        pi2 = math.pi * 2
-        angle_by_degree = (target_motor.angle / 360) * pi2 
-        clamped_angle = min(pi2, max(-pi2, angle_by_degree))
+        result = {'comm_type': comm_type, 'target_id': target_id, 'data16': data16, 'raw_data': data}
+
+        if comm_type == 2:
+            # Type 2 feedback: bit8-15 = current CAN ID, bit16-21 = fault, bit22-23 = mode
+            can_id = data16 & 0xFF
+            fault_bits = (data16 >> 8) & 0x3F
+            mode = (data16 >> 14) & 0x03
+            result.update({
+                'can_id': can_id,
+                'fault_bits': fault_bits,
+                'mode': mode,
+                'angle_raw': int.from_bytes(data[0:2], 'big'),
+                'velocity_raw': int.from_bytes(data[2:4], 'big'),
+                'torque_raw': int.from_bytes(data[4:6], 'big'),
+                'temp_raw': int.from_bytes(data[6:8], 'big'),
+            })
+
+        return result
+
+    def enable_motor(self, m: MotorData):
+        resp = self.send_can_packet(3, m.motor_id, self.host_id, bytearray(8))
+        if resp is None:
+            self.get_logger().warn(f"Motor {m.motor_id}: no response to Enable frame")
+            m.enabled = False
+            return
+        if resp.get('fault_bits'):
+            self.get_logger().warn(f"Motor {m.motor_id}: fault bits {resp['fault_bits']:#x} on enable")
+        m.enabled = True
+        self.get_logger().info(f"Motor {m.motor_id}: enabled, mode={resp.get('mode')}")
+
+    def stop_motor(self, m: MotorData):
+        self.send_can_packet(4, m.motor_id, self.host_id, bytearray(8))
+        m.enabled = False
+
+    def set_zero_position(self, m: MotorData):
+        data = bytearray(8)
+        data[0] = 1
+        resp = self.send_can_packet(6, m.motor_id, self.host_id, data)
+        if resp is None:
+            self.get_logger().warn(f"Motor {m.motor_id}: no response to Set Zero frame")
+            return
+        self.get_logger().info(f"Motor {m.motor_id}: zero position set")
+
+    def send_command(self, target_motor: MotorData):
+        clamped_angle = min(P_MAX, max(P_MIN, target_motor.angle))
 
         p_int = self.float_to_uint(clamped_angle, P_MIN, P_MAX, 16)
         v_int = self.float_to_uint(VELOCITY, V_MIN, V_MAX, 16)
@@ -114,27 +154,32 @@ class MotorController(Node):
         data[6] = kd_int >> 8
         data[7] = kd_int & 0xFF
 
-        try:
-            self.send_can_packet(1, target_motor.motor_id, t_int, data)
-        except serial.SerialTimeoutException:
-            pass
+        resp = self.send_can_packet(1, target_motor.motor_id, t_int, data)
 
-    def set_zero_position(self, m: MotorData):
-        data = bytearray(8)
-        data[0] = 1
-        resp = self.send_can_packet(6, m.motor_id, self.host_id, data)
         if resp is None:
-            self.get_logger().warn(f"Motor {m.motor_id}: no response to Set Zero frame")
+            self.get_logger().warn(f"Motor {target_motor.motor_id}: no feedback frame received")
+            target_motor.enabled = False
             return
-        self.get_logger().info(f"Motor {m.motor_id}: zero position set")
+
+        fault_bits = resp.get('fault_bits', 0)
+        if fault_bits:
+            if target_motor.last_fault != fault_bits:
+                self.get_logger().warn(f"Motor {target_motor.motor_id}: fault bits {fault_bits:#x}")
+            target_motor.last_fault = fault_bits
+
+        mode = resp.get('mode')
+        if mode == 0:  # Reset mode
+            self.get_logger().warn(f"Motor {target_motor.motor_id}: dropped to RESET mode, re-enabling")
+            self.enable_motor(target_motor)
 
     def destroy_node(self):
-        try:
-            for m in self.motors:
-                self.stop_motor(m.motor_id)
-        except Exception:
-            pass
+        for m in self.motors:
+            try:
+                self.stop_motor(m)
+            except Exception as e:
+                self.get_logger().error(f"Motor {m.motor_id}: failed to send stop on shutdown: {e}")
         super().destroy_node()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -144,30 +189,26 @@ def main(args=None):
     root.title("Motor Tuner")
     root.geometry("500x480")
 
-    tk.Label(root, text="Motor 1 Angle by Degree").pack()
+    tk.Label(root, text="Motor 3 Angle (rad)").pack()
     m1 = tk.DoubleVar(value=node.motors[0].angle)
     tk.Entry(root, textvariable=m1).pack()
 
-    tk.Label(root, text="Motor 2 Angle by Degree").pack()
+    tk.Label(root, text="Motor 4 Angle (rad)").pack()
     m2 = tk.DoubleVar(value=node.motors[1].angle)
     tk.Entry(root, textvariable=m2).pack()
-
-    # tk.Label(root, text="Motor 3 Angle by Degree").pack()
-    # m3 = tk.DoubleVar(value=node.motors[2].angle)
-    # tk.Entry(root, textvariable=m3).pack()
 
     def apply_angle(event=None):
         try:
             node.motors[0].angle = float(m1.get())
             node.motors[1].angle = float(m2.get())
-
-            node.send_command(node.motors[0])
-            
-            time.sleep(0.025)
-
-            node.send_command(node.motors[1])
         except ValueError:
-            pass
+            return
+
+        def send_both():
+            node.send_command(node.motors[0])
+            node.send_command(node.motors[1])
+
+        threading.Thread(target=send_both, daemon=True).start()
 
     submit_button = tk.Button(root, text="Send Angle", command=apply_angle)
     submit_button.pack()
@@ -179,6 +220,7 @@ def main(args=None):
 
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
