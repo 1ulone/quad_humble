@@ -24,7 +24,6 @@ T_MIN, T_MAX = -17.0, 17.0
 
 HOST_ID = 253
 
-
 class MotorData():
     def __init__(self, id):
         self.motor_id = id
@@ -33,28 +32,40 @@ class MotorData():
         self.last_fault = None
         self.zero_point = 0.0
         self.prev_zero_point = 0.0
+        self.kp = KP
+        self.kd = KD
+        self.velocity = VELOCITY
+        self.torque = TORQUE
+
+        self.angle_input = None
+        self.zeropoint_input = None
+        self.kp_input = None
+        self.kd_input = None
+        self.velocity_input = None
+        self.torque_input = None
 
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
-        # self.port = PORT
-        # self.baudrate = 921600
-        # self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
-        #
-        # self.host_id = HOST_ID
+        self.port = PORT
+        self.baudrate = 921600
+        self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
+
+        self.host_id = HOST_ID
         self.motors = []
 
         self.motors.append(MotorData(3))
         self.motors.append(MotorData(4))
+        # self.motors.append(MotorData(5))
 
-        # for m in self.motors:
-        #     self.enable_motor(m)
-        #     time.sleep(0.2)
-        #
-        # self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
-        # self.send_command(self.motors[0])
-        # self.send_command(self.motors[1])
+        for m in self.motors:
+            self.enable_motor(m)
+            time.sleep(0.2)
+
+        self.get_logger().info("Program Initialized. Ready for Tuning / Control.")
+        self.send_command(self.motors[0])
+        self.send_command(self.motors[1])
 
     def float_to_uint(self, x, x_min, x_max, bits):
         span = x_max - x_min
@@ -151,10 +162,10 @@ class MotorController(Node):
         clamped_angle = min(pi2, max(-pi2, angle_by_degree))
 
         p_int = self.float_to_uint(clamped_angle, P_MIN, P_MAX, 16)
-        v_int = self.float_to_uint(VELOCITY, V_MIN, V_MAX, 16)
-        kp_int = self.float_to_uint(KP, KP_MIN, KP_MAX, 16)
-        kd_int = self.float_to_uint(KD, KD_MIN, KD_MAX, 16)
-        t_int = self.float_to_uint(TORQUE, T_MIN, T_MAX, 16)
+        v_int = self.float_to_uint(target_motor.velocity, V_MIN, V_MAX, 16)
+        kp_int = self.float_to_uint(target_motor.kp, KP_MIN, KP_MAX, 16)
+        kd_int = self.float_to_uint(target_motor.kd, KD_MIN, KD_MAX, 16)
+        t_int = self.float_to_uint(target_motor.torque, T_MIN, T_MAX, 16)
 
         data = bytearray(8)
         data[0] = p_int >> 8
@@ -202,13 +213,10 @@ def main(args=None):
     root.title("Motor Tuner")
     root.geometry("500x480")
 
-    motor_input = []
-    zeropoint_input = []
-
     def apply_angle(event=None):
         try:
-            for motor in node.motors:
-                motor.angle = float(motor_input[id].get())
+            for id, motor in enumerate(node.motors):
+                motor.angle = float(motor.angle_input.get())
         except ValueError:
             return
 
@@ -221,7 +229,7 @@ def main(args=None):
     def apply_zero_point(event=None):
         try:
             for id, motor in enumerate(node.motors):
-                motor.zero_point = float(zeropoint_input[id])
+                motor.zero_point = float(motor.zeropoint_input.get())
                 motor.angle = get_angle_relative(motor.prev_zero_point, motor.zero_point)
         except ValueError:
             return
@@ -239,8 +247,18 @@ def main(args=None):
 
                 motor.angle = 0
                 motor.prev_zero_point = motor.zero_point
+                motor.zero_point = 0
 
         threading.Thread(target=send_both, daemon=True).start()
+
+    def apply_setting(id):
+        try:
+            node.motor[id].kp = float(node.motor[id].kp_input.get())
+            node.motor[id].kd = float(node.motor[id].kd_input.get())
+            node.motor[id].velocity = float(node.motor[id].velocity_input.get())
+            node.motor[id].torque = float(node.motor[id].torque_input.get())
+        except ValueError:
+            return
 
     def jog_motor(id, isRight):
         newAngle = min(360, max(-360, node.motors[id].angle+10 if isRight==True else node.motors[id].angle-10))
@@ -257,8 +275,6 @@ def main(args=None):
 
         threading.Thread(target=lambda: send_cmd(node.motors[id]), daemon=True).start()
 
-
-
     grid_container = tk.Frame(root)
     grid_container.pack(pady=10, padx=10)
 
@@ -268,33 +284,61 @@ def main(args=None):
 
         # NOTE: set Angle by Degree Input 
         ttk.Label(motor_group, text=f"Motor {id+1} Angle (rad)").pack()
-        motor_input.append(tk.DoubleVar(value=motor.angle))
-        ttk.Entry(motor_group, textvariable=motor_input[id]).pack(fill='x')
+        motor.angle_input = tk.DoubleVar(value=motor.angle)
+        ttk.Entry(motor_group, textvariable=motor.angle_input).pack(fill='x')
 
         # NOTE: set Zero point via Angle
         ttk.Label(motor_group, text=f"Set Motor {id+1} Zero Point").pack()
-        zeropoint_input.append(tk.DoubleVar(value=motor.zero_point))
-        ttk.Entry(motor_group, textvariable=zeropoint_input[id]).pack(fill='x')
+        motor.zeropoint_input = tk.DoubleVar(value=motor.zero_point)
+        ttk.Entry(motor_group, textvariable=motor.zeropoint_input).pack(fill='x')
 
         jm = ttk.Frame(motor_group)
         jm.pack(side="top", pady=10)
 
         ttk.Label(jm, text=f"Jog Motor {id+1}").pack()
-        ttk.Button(jm, text="+", command=lambda: jog_motor(id, True)).pack(side="left", padx=5)
-        ttk.Button(jm, text="-", command=lambda: jog_motor(id, False)).pack(side="left", padx=5)
+        ttk.Button(jm, text="+", command=lambda idx=id: jog_motor(idx, True)).pack(side="left", padx=5)
+        ttk.Button(jm, text="-", command=lambda idx=id: jog_motor(idx, False)).pack(side="left", padx=5)
 
-        zpca = tk.Button(motor_group, text="Set Zero Point from Current Angle", command=lambda: set_current_zp(id))
-        zpca.pack()
+        tk.Button(motor_group, text="Set Zero Point from Current Angle", command=lambda idx=id: set_current_zp(idx)).pack()
+
+
+        ttk.Label(motor_group, text=f"Motor {id+1} Settings").pack()
+
+        kp = ttk.Frame(motor_group)
+        kp.pack(fill='x')
+        ttk.Label(kp, text="KP", width=10).pack(side="left", padx=5)
+        motor.kp_input = tk.DoubleVar(value=motor.kp)  
+        ttk.Entry(kp, textvariable=motor.kp_input).pack(fill='x', side="left")
+
+        kd = ttk.Frame(motor_group)
+        kd.pack(fill='x')
+        ttk.Label(kd, text="kd", width=10).pack(side="left", padx=5)
+        motor.kd_input = tk.DoubleVar(value=motor.kd)  
+        ttk.Entry(kd, textvariable=motor.kd_input).pack(fill='x')
+
+        velocity = ttk.Frame(motor_group)
+        velocity.pack(fill='x')
+        ttk.Label(velocity, text="velocity", width=10).pack(side="left", padx=5)
+        motor.velocity_input = tk.DoubleVar(value=motor.velocity)  
+        ttk.Entry(velocity, textvariable=motor.velocity_input).pack(fill='x')
+
+        torque = ttk.Frame(motor_group)
+        torque.pack(fill='x')
+        ttk.Label(torque, text="torque", width=10).pack(side="left", padx=5)
+        motor.torque_input = tk.DoubleVar(value=motor.torque)  
+        ttk.Entry(torque, textvariable=motor.torque_input).pack(fill='x')
+
+        tk.Button(motor_group, text="Apply Settings", command=lambda idx=id: apply_setting(idx)).pack(fill='x')
+        
 
     angle_subbutton = tk.Button(grid_container, text="Send Angle", command=apply_angle)
-    angle_subbutton.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(20, 5))
+    angle_subbutton.grid(row=3, column=0, columnspan=len(node.motors), sticky="nsew", pady=(20, 5))
 
     zero_subbutton = tk.Button(grid_container, text="Set Zero Point", command=apply_zero_point)
-    zero_subbutton.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=5)
+    zero_subbutton.grid(row=4, column=0, columnspan=len(node.motors), sticky="nsew", pady=5)
 
     spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     spin_thread.start()
-
 
     root.mainloop()
 
