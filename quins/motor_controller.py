@@ -26,7 +26,8 @@ class MotorData():
         self.angle = 0.0
         self.enabled = False
         self.last_fault = None
-
+        self.zero_point = 0.0
+        self.default_zero_point = 0.0
 
 class MotorController(Node):
     def __init__(self):
@@ -129,6 +130,8 @@ class MotorController(Node):
         m.enabled = False
 
     def set_zero_position(self, m: MotorData):
+
+
         data = bytearray(8)
         data[0] = 1
         resp = self.send_can_packet(6, m.motor_id, self.host_id, data)
@@ -194,11 +197,12 @@ def main(args=None):
     root.title("Motor Tuner")
     root.geometry("500x480")
 
-    tk.Label(root, text="Motor 3 Angle (rad)").pack()
+    # NOTE: set Angle by Degree Input 
+    tk.Label(root, text="Motor 1 Angle (rad)").pack()
     m1 = tk.DoubleVar(value=node.motors[0].angle)
     tk.Entry(root, textvariable=m1).pack()
 
-    tk.Label(root, text="Motor 4 Angle (rad)").pack()
+    tk.Label(root, text="Motor 2 Angle (rad)").pack()
     m2 = tk.DoubleVar(value=node.motors[1].angle)
     tk.Entry(root, textvariable=m2).pack()
 
@@ -215,8 +219,43 @@ def main(args=None):
 
         threading.Thread(target=send_both, daemon=True).start()
 
-    submit_button = tk.Button(root, text="Send Angle", command=apply_angle)
-    submit_button.pack()
+    angle_subbutton = tk.Button(root, text="Send Angle", command=apply_angle)
+    angle_subbutton.pack()
+
+    # NOTE: set Zero point via Angle
+    tk.Label(root, text="Set Motor 1 Zero Point").pack()
+    z1 = tk.DoubleVar(value=node.motors[0].zero)
+    tk.Entry(root, textvariable=z1).pack()
+
+    tk.Label(root, text="Set Motor 2 Zero Point").pack()
+    z2 = tk.DoubleVar(value=node.motors[1].zero)
+    tk.Entry(root, textvariable=z2).pack()
+
+    def apply_zero_point(event=None):
+        try:
+            node.motors[0].angle = float(m1.get())
+            node.motors[1].angle = float(m2.get())
+        except ValueError:
+            return
+
+        def send_both():
+            node.send_command(node.motors[0])
+            node.send_command(node.motors[1])
+
+            time.sleep(0.5);
+
+            node.set_zero_position(node.motors[0])
+            node.set_zero_position(node.motors[1])
+
+            time.sleep(0.5);
+
+            node.motors[0].angle = 0;
+            node.motors[1].angle = 0;
+
+        threading.Thread(target=send_both, daemon=True).start()
+
+    zero_subbutton = tk.Button(root, text="Set Zero Point", command=apply_zero_point)
+    zero_subbutton.pack()
 
     spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     spin_thread.start()
