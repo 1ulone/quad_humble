@@ -1,7 +1,7 @@
 import serial
 import time
 
-PORT = '/dev/ttyUSB0'
+PCOM6ORT = '/dev/ttyCH341USB0'
 BAUDRATE = 921600
 HOST_ID = 253
 

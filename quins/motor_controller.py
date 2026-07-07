@@ -6,6 +6,10 @@ import math
 import tkinter as tk
 import threading
 
+from quins.zero_point_init import get_angle_relative, reset_zero_position
+
+PORT = '/dev/ttyCH341USB0'
+
 KP = 1.0
 KD = 0.2
 VELOCITY = 0.44
@@ -27,13 +31,13 @@ class MotorData():
         self.enabled = False
         self.last_fault = None
         self.zero_point = 0.0
-        self.default_zero_point = 0.0
+        self.prev_zero_point = 0.0
 
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
-        self.port = '/dev/ttyCH341USB0'
+        self.port = PORT
         self.baudrate = 921600
         self.ser = serial.Serial(self.port, self.baudrate, timeout=0.1)
 
@@ -190,6 +194,7 @@ class MotorController(Node):
 
 
 def main(args=None):
+
     rclpy.init(args=args)
     node = MotorController()
 
@@ -224,33 +229,36 @@ def main(args=None):
 
     # NOTE: set Zero point via Angle
     tk.Label(root, text="Set Motor 1 Zero Point").pack()
-    z1 = tk.DoubleVar(value=node.motors[0].zero)
+    z1 = tk.DoubleVar(value=node.motors[0].zero_point)
     tk.Entry(root, textvariable=z1).pack()
 
     tk.Label(root, text="Set Motor 2 Zero Point").pack()
-    z2 = tk.DoubleVar(value=node.motors[1].zero)
+    z2 = tk.DoubleVar(value=node.motors[1].zero_point)
     tk.Entry(root, textvariable=z2).pack()
 
     def apply_zero_point(event=None):
         try:
-            node.motors[0].angle = float(m1.get())
-            node.motors[1].angle = float(m2.get())
+            node.motors[0].zero_point = float(z1.get())
+            node.motors[0].angle = get_angle_relative(node.motors[0].prev_zero_point, float(z1.get()))
+
+            node.motors[1].zero_point = float(z2.get())
+            node.motors[1].angle = get_angle_relative(node.motors[1].prev_zero_point, float(z2.get()))
         except ValueError:
             return
 
         def send_both():
-            node.send_command(node.motors[0])
-            node.send_command(node.motors[1])
+            for motor in node.motors:
+                if motor.zero_point == motor.prev_zero_point:
+                    continue
 
-            time.sleep(0.5);
+                node.send_command(motor)
+                time.sleep(0.5)
 
-            node.set_zero_position(node.motors[0])
-            node.set_zero_position(node.motors[1])
+                node.set_zero_position(motor)
+                time.sleep(0.5)
 
-            time.sleep(0.5);
-
-            node.motors[0].angle = 0;
-            node.motors[1].angle = 0;
+                motor.angle = 0
+                motor.prev_zero_point = motor.zero_point
 
         threading.Thread(target=send_both, daemon=True).start()
 
