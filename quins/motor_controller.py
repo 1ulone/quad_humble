@@ -128,6 +128,15 @@ class MotorController(Node):
         self.send_can_packet(4, m.motor_id, self.host_id, bytearray(8))
         m.enabled = False
 
+    def set_zero_position(self, m: MotorData):
+        data = bytearray(8)
+        data[0] = 1
+        resp = self.send_can_packet(6, m.motor_id, self.host_id, data)
+        if resp is None:
+            self.get_logger().warn(f"Motor {m.motor_id}: no response to Set Zero frame")
+            return
+        self.get_logger().info(f"Motor {m.motor_id}: zero position set")
+
     def send_command(self, target_motor: MotorData):
 
         pi2 = math.pi * 2
