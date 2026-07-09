@@ -1,7 +1,7 @@
 import serial
 import time
 
-PORT = '/dev/ttyCH341USB0'
+PORT = '/dev/ttyUSB0'
 BAUDRATE = 921600
 HOST_ID = 253
 
@@ -34,7 +34,7 @@ def get_device_id(target_id):
     print(f"Raw response: {response.hex() if response else '(nothing received)'}")
     print("---")
 
-get_device_id(3)
-get_device_id(4)
+get_device_id(127)
+# get_device_id(4)
 
 ser.close()
