@@ -13,7 +13,7 @@ PORT = '/dev/ttyUSB0'
 HOST_ID = 253
 
 # NOTE: Default PID Values
-KP = 48.0
+KP = 1.0
 KD = 1.5
 KI = 0.5
 VELOCITY = 0.0
@@ -370,7 +370,7 @@ def main(args=None):
             node.motors[id].kp = float(node.motors[id].kp_input.get())
             node.motors[id].kd = float(node.motors[id].kd_input.get())
             node.motors[id].velocity = float(node.motors[id].velocity_input.get())
-            node.motors[id].torque = float(node.motors[id].torque_input.get())
+            # node.motors[id].torque = float(node.motors[id].torque_input.get())
         except ValueError:
             return
 
